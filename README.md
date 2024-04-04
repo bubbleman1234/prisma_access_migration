@@ -16,7 +16,7 @@
 4. Activate the virtual environment
     `.\.venv\Scripts\Activate.ps1`
 5. Installing Required Libraries
-    Once you have activated the virtual environment, install the required libraries by running:
+    Once you have activated the virtual environment, install the required libraries by running:<br>
         `pip install -r requirements.txt`
 
 ## Usage

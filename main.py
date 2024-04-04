@@ -1,10 +1,10 @@
 from tabulate import tabulate
 from dotenv import load_dotenv
+from common import *
 import requests
 import json
 import csv
 import os
-
 import datetime
 import time
 import pytz
@@ -12,19 +12,27 @@ import pytz
 # Load environment variables from .env file
 load_dotenv()
 
+# Timezone settings
+timezone = "Asia/Bangkok"
+
+# Prisma Access URLs & Authentication information
 auth_url = "https://auth.apps.paloaltonetworks.com/oauth2/access_token"
+address_url_prefix = "https://api.sase.paloaltonetworks.com/sse/config/v1/addresses"
+address_url = "https://api.sase.paloaltonetworks.com/sse/config/v1/addresses?folder=All"
+address_scope = "All" # Scope All in address object = scope Global in Prisma Access
+tag_url_prefix = "https://api.sase.paloaltonetworks.com/sse/config/v1/tags"
+tag_scope = "All"
+get_address_limit = 10000
+
 client_id = os.getenv("PRISMA_CLIENT_ID")
 client_secret = os.getenv("PRISMA_SECRET_KEY")
 tsg_id = os.getenv("PRISMA_TSG_ID")
 
-address_url_prefix = "https://api.sase.paloaltonetworks.com/sse/config/v1/addresses/"
-address_url = "https://api.sase.paloaltonetworks.com/sse/config/v1/addresses?folder=All"
-
+# Input File for Configuration
 csv_file = "export_objects_addresses_full.csv"
 tags_csv_file = "export_objects_tags_full.csv"
 
 prisma_topics = [["1", "Objects:Addresses"],["2", "Objects:Tags"]]
-# login_timestamp = datetime.datetime.utcnow()
 
 def login():
     data = {
@@ -49,23 +57,23 @@ def login():
 def validate_token():
     global login_timestamp
     global token
+    
     # Default token is expired in 15 minutes. Minus 60 seconds for refresh token in 14 minutes.
     expire_in_seconds = token["expires_in"] - 60
     # Calculate the expiration time based on 'expires_in' duration
     expiration_time_utc = login_timestamp + datetime.timedelta(seconds=expire_in_seconds)
-    # print("Time UTC Token Expire: {0}".format(expiration_time_utc))
     
-    # Convert expiration time to Bangkok timezone
+    # Convert UTC to Local timezone
     current_time_utc = datetime.datetime.utcnow()
-    bangkok_timezone = pytz.timezone('Asia/Bangkok')
-    current_time_bangkok = current_time_utc.replace(tzinfo=pytz.utc).astimezone(bangkok_timezone)
-    expiration_time_bangkok = expiration_time_utc.replace(tzinfo=pytz.utc).astimezone(bangkok_timezone)
-    print("Time Zone Now: {0}".format(current_time_bangkok))
-    print("Time Zone Expiration: {0}".format(expiration_time_bangkok))
+    local_timezone = pytz.timezone(timezone)
+    current_time_local = current_time_utc.replace(tzinfo=pytz.utc).astimezone(local_timezone)
+    expiration_time_local = expiration_time_utc.replace(tzinfo=pytz.utc).astimezone(local_timezone)
+    
+    print("Current Time: {0}".format(current_time_local))
+    print("Token Expiration Time: {0}".format(expiration_time_local))
     
     if expiration_time_utc < current_time_utc:
-        print("Token Expired!!")
-        print("Refresh Token...")
+        print("!!Current Token almost expired!!\nStart Process Refresh Token...")
         token = login()
         login_timestamp = datetime.datetime.utcnow()
 
@@ -74,15 +82,9 @@ def validate_token():
 
 def get_address_id():
     global token
-    final_url = address_url + '&limit=10000'
-    payload={}
-    headers = {
-        'Accept': 'application/json',
-        'Authorization': 'Bearer ' + token["access_token"]
-    }
+    url = address_url_prefix + "?folder=" + address_scope + "&limit=" + str(get_address_limit)
+    response = submit_request(token, "GET", url)
 
-    response = requests.request("GET", final_url, headers=headers, data=payload)
-    print(response.json())
     return response.json()
 
 
@@ -119,12 +121,33 @@ def send_request(address, action):
             }     
 
     elif action == 'Delete' or action == 'd':
-        final_url = address_url_prefix + address
+        final_url = address_url_prefix + "/" + address
         method = "DELETE"
         payload={}
 
     response = requests.request(method, final_url, headers=headers, data=payload)
     print(response.text)
+
+
+def send_tags_request(tags, action):
+    validate_token()
+    
+    if action == 'Create' or action == 'c':
+        if tags[1] != "Predefined" or tags[1] != "SR21-29219":
+            url = tag_url_prefix + "?folder=" + tag_scope
+            if tags[2] != '':
+                payload = json.dumps({
+                    "color": tags[2],
+                    "comments": tags[3],
+                    "name": tags[0]
+                })
+            else:
+                payload = json.dumps({
+                    "comments": tags[3],
+                    "name": tags[0]
+                })
+            
+            submit_request(token, "POST", url, payload)
 
 
 def config_address(action):
@@ -141,38 +164,40 @@ def config_address(action):
             if each_address['name'] != "Palo Alto Networks Sinkhole":
                 print(each_address['id'])
                 send_request(each_address['id'], action)
+    else:
+        print("Invalid action")
+        exit(1)
 
 
 def config_tags(action):
     global token
-    print(token)
-    # if action == 'Create' or action == 'c':
-    #     with open(tags_csv_file, newline='') as csvfile:
-    #         csv_reader = csv.reader(csvfile, delimiter=',')
-    #         next(csv_reader) # skip first line
+    if action == 'Create' or action == 'c':
+        with open(tags_csv_file, newline='') as csvfile:
+            csv_reader = csv.reader(csvfile, delimiter=',')
+            next(csv_reader) # skip first line
+            for row in csv_reader:
+                print(row)
+                send_tags_request(row, action)
                 
 
-def test_token(token):
-    for i in range(20):
-        token = validate_token(token)
-        print(token)
-        time.sleep(95)
-
 def main():
+    global token
+    global login_timestamp
+    
+    # Menu Get Input from User
     action = input("Enter Action Type(Create[c] | Delete[d]): ")
     if action == 'Create' or action == 'c':
         print(tabulate(prisma_topics, headers=["No.", "Topic Detail"], tablefmt="pretty"))
         topic_create = input("Please select number topic to create: ")
-    global token
+
     token = login()
-    global login_timestamp 
     login_timestamp = datetime.datetime.utcnow()
-    # print("Token: {0}".format(token["access_token"]))
     
-    if topic_create == 1:
+    if topic_create == "1":
         config_address(action)
-    elif topic_create == 2:
+    elif topic_create == "2":
         config_tags(action)
+
 
 if __name__ == "__main__":
     main()
