@@ -7,10 +7,10 @@
 ## Installation
 1. Clone or Download the repository
 2. Open PowerShell on Windows and cd to the directory.
-3. Create file name `.env` in the directory and fill the information with the format below.
-    `PRISMA_CLIENT_ID=<User Access Prisma Access Tenant>`
-    `PRISMA_SECRET_KEY=<Secre Key>`
-    `PRISMA_TSG_ID=<Tenant ID>`
+3. Create file name `.env` in the directory and fill the information with the following detail.
+    \`PRISMA_CLIENT_ID=<User Access Prisma Access Tenant>`
+    \`PRISMA_SECRET_KEY=<Secre Key>`
+    \`PRISMA_TSG_ID=<Tenant ID>`
 3. Create a virtual environment (venv) with the following command.
     `python -m venv venv`
 4. Activate the virtual environment
