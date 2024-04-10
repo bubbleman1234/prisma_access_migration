@@ -133,7 +133,8 @@ def send_tags_request(tags, action):
     validate_token()
     
     if action == 'Create' or action == 'c':
-        if tags[1] != "Predefined" or tags[1] != "SR21-29219":
+        if tags[1] != "Predefined":
+            # url = "https://api.sase.paloaltonetworks.com/sse/config/v1/tags?folder=All"
             url = tag_url_prefix + "?folder=" + tag_scope
             if tags[2] != '':
                 payload = json.dumps({
@@ -176,7 +177,6 @@ def config_tags(action):
             csv_reader = csv.reader(csvfile, delimiter=',')
             next(csv_reader) # skip first line
             for row in csv_reader:
-                print(row)
                 send_tags_request(row, action)
                 
 

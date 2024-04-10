@@ -1,4 +1,4 @@
-# prisma_access_migration
+# Prisma Access Migration
 
 ## Prerequisites
 - Python >= 3.9.13
